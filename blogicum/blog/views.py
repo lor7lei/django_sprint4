@@ -3,22 +3,26 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
-
 from .models import Post, Category, Comment
-from .forms import PostForm, CommentForm
+from .forms import PostForm, CommentForm, ProfileForm
 
 User = get_user_model()
 
 
 def index(request):
     """Главная страница."""
+    print("=== INDEX VIEW CALLED ===")
     posts = Post.objects.filter(
         is_published=True,
         category__is_published=True,
         pub_date__lte=timezone.now()
     ).order_by('-pub_date')[:10]
     
-    return render(request, 'blog/index.html', {'post_list': posts})
+    print(f"Найдено постов: {posts.count()}")
+    for post in posts:
+        print(f"Пост: {post.title}, дата: {post.pub_date}")
+    
+    return render(request, 'blog/index.html', {'page_obj': posts})
 
 
 def post_detail(request, id):
@@ -31,7 +35,20 @@ def post_detail(request, id):
         ),
         pk=id
     )
-    return render(request, 'blog/detail.html', {'post': post})
+    
+    # Получаем комментарии к посту
+    comments = post.comments.filter(is_published=True)
+    
+    # Форма для комментария (если пользователь авторизован)
+    form = None
+    if request.user.is_authenticated:
+        form = CommentForm()
+    
+    return render(request, 'blog/detail.html', {
+        'post': post,
+        'comments': comments,
+        'form': form
+    })
 
 
 def category_posts(request, category_slug):
@@ -44,14 +61,30 @@ def category_posts(request, category_slug):
         category=category,
         is_published=True,
         pub_date__lte=timezone.now()
-    )
-    return render(request, 'blog/category.html', {'category': category, 'post_list': posts})
+    ).order_by('-pub_date')
+    
+    return render(request, 'blog/category.html', {
+        'category': category,
+        'page_obj': posts  # ← ВАЖНО!
+    })
 
 
 def profile(request, username):
     """Профиль пользователя."""
     profile_user = get_object_or_404(User, username=username)
-    return render(request, 'blog/profile.html', {'profile': profile_user})
+    
+    # Получаем посты пользователя
+    posts = Post.objects.filter(
+        author=profile_user,
+        is_published=True,
+        category__is_published=True,
+        pub_date__lte=timezone.now()
+    ).order_by('-pub_date')
+    
+    return render(request, 'blog/profile.html', {
+        'profile': profile_user,
+        'page_obj': posts  # ← ВАЖНО!
+    })
 
 
 @login_required
@@ -61,22 +94,15 @@ def edit_profile(request, username):
     if request.user != user:
         return redirect('blog:profile', username=username)
     
-    
     if request.method == 'POST':
-        user.first_name = request.POST.get('first_name', '')
-        user.last_name = request.POST.get('last_name', '')
-        user.email = request.POST.get('email', '')
-        user.save()
-        return redirect('blog:profile', username=username)
- 
-
-    form_data = {
-        'first_name': user.first_name,
-        'last_name': user.last_name,
-        'email': user.email,
-    }
+        form = ProfileForm(request.POST, instance=user)
+        if form.is_valid():
+            form.save()
+            return redirect('blog:profile', username=username)
+    else:
+        form = ProfileForm(instance=user)
     
-    return render(request, 'blog/user.html', {'form': form_data, 'profile': user})
+    return render(request, 'blog/user.html', {'form': form, 'profile': user})
 
 
 @login_required
