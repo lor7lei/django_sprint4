@@ -33,7 +33,7 @@ class Category(models.Model):
         verbose_name_plural = 'Категории'
 
     def __str__(self):
-        return str(self.title)
+        return self.title
 
 
 class Location(models.Model):
@@ -56,7 +56,7 @@ class Location(models.Model):
         verbose_name_plural = 'Местоположения'
 
     def __str__(self):
-        return str(self.name)
+        return self.name
 
 
 class Post(models.Model):
@@ -71,6 +71,11 @@ class Post(models.Model):
             'Если установить дату и время в будущем — '
             'можно делать отложенные публикации.'
         )
+    )
+    image = models.ImageField(
+        'Изображение',
+        upload_to='post_images/',
+        blank=True
     )
     author = models.ForeignKey(
         User,
@@ -105,7 +110,8 @@ class Post(models.Model):
         verbose_name_plural = 'Публикации'
 
     def __str__(self):
-        return str(self.title)
+        return self.title
+
 
 class Comment(models.Model):
     text = models.TextField('Текст комментария')
