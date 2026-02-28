@@ -80,6 +80,7 @@ class Post(models.Model):
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
+        related_name='posts',  # ← ДОБАВЬ ЭТО!
         verbose_name='Автор публикации'
     )
     location = models.ForeignKey(
@@ -87,12 +88,14 @@ class Post(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
+        related_name='posts',  # ← ДОБАВЬ ЭТО!
         verbose_name='Местоположение'
     )
     category = models.ForeignKey(
         Category,
         on_delete=models.SET_NULL,
         null=True,
+        related_name='posts',  # ← ДОБАВЬ ЭТО!
         verbose_name='Категория'
     )
     is_published = models.BooleanField(
@@ -133,6 +136,14 @@ class Comment(models.Model):
         help_text='Снимите галочку, чтобы скрыть комментарий.'
     )
     created_at = models.DateTimeField('Добавлено', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'комментарий'
+        verbose_name_plural = 'Комментарии'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.author.username}: {self.text[:20]}...'
 
     class Meta:
         verbose_name = 'комментарий'

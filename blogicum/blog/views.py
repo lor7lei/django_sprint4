@@ -4,10 +4,11 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.core.paginator import Paginator
-
+from django.contrib import messages  
 from .models import Post, Category, Comment
-from .forms import PostForm, CommentForm, ProfileForm  # ← ProfileForm должен быть здесь!
-
+from django.db.models import Count
+from .forms import PostForm, CommentForm, ProfileForm  
+from django.views.decorators.csrf import csrf_exempt  
 User = get_user_model()
 
 
@@ -18,6 +19,8 @@ def index(request):
         is_published=True,
         category__is_published=True,
         pub_date__lte=timezone.now()
+    ).annotate(
+        comment_count=Count('comments')
     ).order_by('-pub_date')
     
     print(f"Найдено постов: {posts.count()}")
@@ -26,8 +29,64 @@ def index(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    return render(request, 'blog/index.html', {'page_obj': page_obj})  
+    return render(request, 'blog/index.html', {'page_obj': page_obj})
 
+
+def profile(request, username):
+    profile_user = get_object_or_404(User, username=username)
+    
+    if request.user == profile_user:
+        posts = Post.objects.filter(
+            author=profile_user
+        ).annotate(
+            comment_count=Count('comments')
+        ).order_by('-pub_date')
+    else:
+        posts = Post.objects.filter(
+            author=profile_user,
+            is_published=True,
+            category__is_published=True,
+            pub_date__lte=timezone.now()
+        ).annotate(
+            comment_count=Count('comments')
+        ).order_by('-pub_date')
+    
+    paginator = Paginator(posts, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'blog/profile.html', {
+        'profile': profile_user,
+        'page_obj': page_obj
+    })
+
+
+@login_required
+def category_posts(request, category_slug):
+    """Посты категории."""
+    category = get_object_or_404(
+        Category.objects.filter(is_published=True),
+        slug=category_slug
+    )
+    posts = Post.objects.filter(
+        category=category,
+        is_published=True,
+        pub_date__lte=timezone.now()
+    ).annotate(
+        comment_count=Count('comments')
+    ).order_by('-pub_date')
+    
+    paginator = Paginator(posts, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'blog/category.html', {
+        'category': category,
+        'page_obj': page_obj
+    })
+
+
+@login_required
 def post_detail(request, id):
     post = get_object_or_404(Post, pk=id)
     
@@ -45,99 +104,89 @@ def post_detail(request, id):
     })
 
 
-def category_posts(request, category_slug):
-    """Посты категории."""
-    category = get_object_or_404(
-        Category.objects.filter(is_published=True),
-        slug=category_slug
-    )
-    posts = Post.objects.filter(
-        category=category,
-        is_published=True,
-        pub_date__lte=timezone.now()
-    ).order_by('-pub_date')
-    
-    paginator = Paginator(posts, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    return render(request, 'blog/category.html', {
-        'category': category,
-        'page_obj': page_obj  # ← было 'posts', исправлено на 'page_obj'
-    })
-
-
-def profile(request, username):
-    """Профиль пользователя."""
-    profile_user = get_object_or_404(User, username=username)
-    
-    if request.user == profile_user:
-        posts = Post.objects.filter(
-            author=profile_user
-        ).order_by('-pub_date')
-    else:
-        posts = Post.objects.filter(
-            author=profile_user,
-            is_published=True,
-            category__is_published=True,
-            pub_date__lte=timezone.now()
-        ).order_by('-pub_date')
-    
-    paginator = Paginator(posts, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    return render(request, 'blog/profile.html', {
-        'profile': profile_user,
-        'page_obj': page_obj  
-    })
-
 
 @login_required
 def edit_profile(request, username):
-      user = get_object_or_404(User, username=username)
-      if request.user != user:
-          return redirect('blog:profile', username=username)
-
-      if request.method == 'POST':
-          form = ProfileForm(request.POST, instance=user)
-          if form.is_valid():
-              form.save()
-              return redirect('blog:profile', username=username)
-      else:
-          form = ProfileForm(instance=user)
-      return render(request, 'blog/user.html', {'form': form, 'profile': user})
+    print(f"\n=== EDIT PROFILE ===")
+    print(f"username: {username}")
+    print(f"request.user: {request.user}")
+    
+    user = get_object_or_404(User, username=username)
+    print(f"user found: {user}")
+    
+    if request.user != user:
+        print(f"NOT OWNER - redirect to profile")
+        return redirect('blog:profile', username=username)
+    
+    if request.method == 'POST':
+        form = ProfileForm(request.POST, instance=user)
+        print(f"POST data: {request.POST}")
+        print(f"form is_valid: {form.is_valid()}")
+        print(f"form errors: {form.errors}")
+        if form.is_valid():
+            form.save()
+            print(f"PROFILE SAVED")
+            return redirect('blog:profile', username=username)
+    else:
+        form = ProfileForm(instance=user)
+        print(f"GET request - showing form")
+    
+    return render(request, 'blog/user.html', {'form': form, 'profile': user})
 
 
 @login_required
 def add_comment(request, id):
-    post = get_object_or_404(Post, pk=id)
+    print(f"\n=== ADD COMMENT ===")
+    print(f"post_id: {id}")
+    print(f"method: {request.method}")
+    
+    try:
+        post = Post.objects.get(pk=id)
+        print(f"post found: {post}")
+    except Post.DoesNotExist:
+        print(f"post NOT FOUND - raising 404")
+        raise Http404("Пост не найден")
+    
     if request.method == 'POST':
         form = CommentForm(request.POST)
+        print(f"POST data: {request.POST}")
+        print(f"form is_valid: {form.is_valid()}")
+        print(f"form errors: {form.errors}")
         if form.is_valid():
             comment = form.save(commit=False)
             comment.author = request.user
             comment.post = post
-            comment.is_published = True
             comment.save()
+            print(f"COMMENT SAVED with id: {comment.id}")
             return redirect('blog:post_detail', id=id)
+        else:
+            print(f"FORM INVALID - redirecting")
+    else:
+        print(f"GET request - redirecting")
+    
     return redirect('blog:post_detail', id=id)
 
 
 @login_required
 def create_post(request):
+    print(f"\n=== CREATE POST ===")
+    print(f"method: {request.method}")
+    
     if request.method == 'POST':
         form = PostForm(request.POST, request.FILES)
+        print(f"POST data: {request.POST}")
+        print(f"FILES: {request.FILES}")
+        print(f"form is_valid: {form.is_valid()}")
+        print(f"form errors: {form.errors}")
         if form.is_valid():
             post = form.save(commit=False)
             post.author = request.user
             post.save()
-            messages.success(request, 'Публикация создана успешно!')
+            print(f"POST SAVED with id: {post.id}")
             return redirect('blog:profile', username=request.user.username)
-        else:
-            messages.error(request, 'Форма содержит ошибки.')
     else:
         form = PostForm()
+        print(f"GET request - showing form")
     
     return render(request, 'blog/create.html', {'form': form})
 

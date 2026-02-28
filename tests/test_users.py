@@ -180,12 +180,12 @@ def _test_user_info_displayed(
 ) -> None:
     if profile_user.first_name not in profile_user_content:
         raise AssertionError(
-            f"Убедитесь, что на странице `{printed_url}` отображается имя"
+            f"Убедитесь, что на странице {printed_url} отображается имя"
             " пользователя."
         )
     if profile_user.last_name not in profile_user_content:
         raise AssertionError(
-            f"Убедитесь, что на странице `{printed_url}` отображается фамилия"
+            f"Убедитесь, что на странице {printed_url} отображается фамилия"
             " пользователя."
         )
 

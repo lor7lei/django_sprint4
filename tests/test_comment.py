@@ -147,7 +147,6 @@ def test_comment(
             " количество комментариев. Число комментариев должно быть указано"
             " в круглых скобках."
         )
-
     # check comment count on profile page
     comment_adapter = CommentModelAdapter(created_items[0])
     comment_post_adapter = PostModelAdapter(comment_adapter.post)
