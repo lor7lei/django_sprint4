@@ -80,7 +80,7 @@ class Post(models.Model):
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='posts',  # ← ДОБАВЬ ЭТО!
+        related_name='posts',
         verbose_name='Автор публикации'
     )
     location = models.ForeignKey(
@@ -88,14 +88,14 @@ class Post(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='posts',  # ← ДОБАВЬ ЭТО!
+        related_name='posts',
         verbose_name='Местоположение'
     )
     category = models.ForeignKey(
         Category,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='posts',  # ← ДОБАВЬ ЭТО!
+        related_name='posts',
         verbose_name='Категория'
     )
     is_published = models.BooleanField(
@@ -136,19 +136,17 @@ class Comment(models.Model):
         help_text='Снимите галочку, чтобы скрыть комментарий.'
     )
     created_at = models.DateTimeField('Добавлено', auto_now_add=True)
+++  updated_at = models.DateTimeField('Обновлено', auto_now=True, blank=True, null=True)
 
     class Meta:
         verbose_name = 'комментарий'
         verbose_name_plural = 'Комментарии'
         ordering = ['created_at']
+++      indexes = [
+++          models.Index(fields=['-created_at']),
+++      ]
 
     def __str__(self):
-        return f'{self.author.username}: {self.text[:20]}...'
-
-    class Meta:
-        verbose_name = 'комментарий'
-        verbose_name_plural = 'Комментарии'
-        ordering = ['created_at']
-
-    def __str__(self):
-        return f'{self.author.username}: {self.text[:20]}...'
+++      # Обрезаем длинный текст для красивого отображения в 
+++      short_text = self.text[:50] + '...' if len(self.text) > 50 else self.text
+++      return f'{self.author.username}: {short_text}'
